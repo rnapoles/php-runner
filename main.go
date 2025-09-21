@@ -3,7 +3,6 @@ package main
 import (
 	"bufio"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -214,7 +213,7 @@ func findPhpVersionFile(startDir string) string {
 	dir := startDir
 	for {
 		versionPath := filepath.Join(dir, versionFile)
-		if content, err := ioutil.ReadFile(versionPath); err == nil {
+		if content, err := os.ReadFile(versionPath); err == nil {
 			version := strings.TrimSpace(string(content))
 			if version != "" {
 				return version
@@ -253,7 +252,7 @@ func getCurrentPhpVersion() string {
 // createPhpVersionFile creates a .php-version file with the specified version
 func createPhpVersionFile(dir, version string) {
 	versionPath := filepath.Join(dir, versionFile)
-	err := ioutil.WriteFile(versionPath, []byte(version+"\n"), 0644)
+	err := os.WriteFile(versionPath, []byte(version+"\n"), 0644)
 	if err != nil {
 		fmt.Printf("Warning: Could not create %s: %v\n", versionPath, err)
 	} else {
