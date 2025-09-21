@@ -8,37 +8,118 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"runtime"
 	"strings"
 	"syscall"
 )
 
 type Config map[string]string
 
-type AppError struct{}
-
-func (m *AppError) Error() string {
-	return "boom"
-}
-
 const (
-	configFile     = "php-runner.yaml"
+	configFileName = "php-runner.yaml"
 	versionFile    = ".php-version"
 	defaultVersion = "8.2"
 )
 
-func fileExist(path string) bool {
-	// os.Stat returns file info and an error if any.
-	info, err := os.Stat(path)
-
-	// If os.Stat returns an error, we check if it's a "not exist" error.
-	// This is the standard way to check for a non-existent file.
-	if os.IsNotExist(err) {
-		return false
+func main() {
+	// Load configuration
+	configPath, err := findConfigFile()
+	if err != nil {
+		fmt.Printf("Error finding config file: %v\n", err)
+		os.Exit(1)
 	}
 
-	// If there was no error, something exists at the path.
-	// We then check if it's a directory. If it is, we return false.
-	return !info.IsDir()
+	config, err := loadConfig(configPath)
+	if err != nil {
+		fmt.Printf("Error loading config from %s: %v\n", configPath, err)
+		os.Exit(1)
+	}
+
+	// Get current working directory
+	cwd, err := os.Getwd()
+	if err != nil {
+		fmt.Printf("Error getting current directory: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Get PHP version to use
+	version := getPhpVersion(cwd, config)
+
+	// Get PHP executable path
+	phpPath, exists := config[version]
+	if !exists {
+		fmt.Printf("PHP version %s not found in configuration\n", version)
+		os.Exit(1)
+	}
+
+	// Check if PHP executable exists
+	if _, err := os.Stat(phpPath); os.IsNotExist(err) {
+		fmt.Printf("PHP executable not found at: %s\n", phpPath)
+		os.Exit(1)
+	}
+
+	// Execute PHP with all arguments
+	args := os.Args[1:] // Skip the program name
+	cmd := exec.Command(phpPath, args...)
+	cmd.Stdin = os.Stdin
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	err = cmd.Run()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				os.Exit(status.ExitStatus())
+			}
+		}
+		fmt.Printf("Error executing PHP: %v\n", err)
+		os.Exit(1)
+	}
+}
+
+// findConfigFile searches for php-runner.yaml in platform-specific locations
+func findConfigFile() (string, error) {
+	var searchPaths []string
+
+	if runtime.GOOS == "windows" {
+		// Windows paths
+		if userProfile := os.Getenv("USERPROFILE"); userProfile != "" {
+			searchPaths = append(searchPaths, filepath.Join(userProfile, configFileName))
+		}
+		if appData := os.Getenv("APPDATA"); appData != "" {
+			searchPaths = append(searchPaths, filepath.Join(appData, configFileName))
+		}
+		if programData := os.Getenv("PROGRAMDATA"); programData != "" {
+			searchPaths = append(searchPaths, filepath.Join(programData, configFileName))
+		}
+	} else {
+		// Unix-like systems (Linux, macOS, etc.)
+		if home := os.Getenv("HOME"); home != "" {
+			searchPaths = append(searchPaths, filepath.Join(home, "."+configFileName))
+		}
+		searchPaths = append(searchPaths, filepath.Join("/etc", configFileName))
+		searchPaths = append(searchPaths, filepath.Join("/usr/local", configFileName))
+	}
+
+	// Always add executable path as last option
+	if exePath, err := os.Executable(); err == nil {
+		exeDir := filepath.Dir(exePath)
+		searchPaths = append(searchPaths, filepath.Join(exeDir, configFileName))
+	}
+
+	// Return the first existing file
+	for _, path := range searchPaths {
+		if _, err := os.Stat(path); err == nil {
+			return path, nil
+		}
+	}
+
+	// If no file found, return the first path for error messages
+	if len(searchPaths) > 0 {
+		return searchPaths[0], fmt.Errorf("config file not found in any of these locations:\n%s", strings.Join(searchPaths, "\n"))
+	}
+
+	return "", fmt.Errorf("could not determine config file locations")
 }
 
 // loadConfig loads and parses the YAML-style configuration file line by line
@@ -177,89 +258,5 @@ func createPhpVersionFile(dir, version string) {
 		fmt.Printf("Warning: Could not create %s: %v\n", versionPath, err)
 	} else {
 		fmt.Printf("Created %s with PHP version %s\n", versionPath, version)
-	}
-}
-
-func getConfig() (Config, error) {
-
-	// Get home directory
-	homeDir, err := os.UserHomeDir()
-	configPath := filepath.Join(homeDir, configFile)
-
-	if err != nil && fileExist(configPath) {
-		config, err := loadConfig(configPath)
-		if err != nil {
-			fmt.Printf("Error loading config from %s: %v\n", configPath, err)
-			return nil, err
-		}
-
-		return config, err
-	} else {
-		// Get executable directory
-		exePath, err := os.Executable()
-		if err != nil {
-			fmt.Printf("Error getting executable path: %v\n", err)
-			os.Exit(1)
-		}
-		exeDir := filepath.Dir(exePath)
-
-		// Load configuration
-		configPath := filepath.Join(exeDir, configFile)
-
-		config, err := loadConfig(configPath)
-		if err != nil {
-			fmt.Printf("Error loading config from %s: %v\n", configPath, err)
-			return config, err
-		}
-
-		return config, err
-	}
-
-	return nil, err
-}
-
-func main() {
-
-	config, err := getConfig()
-
-	// Get current working directory
-	cwd, err := os.Getwd()
-	if err != nil {
-		fmt.Printf("Error getting current directory: %v\n", err)
-		os.Exit(1)
-	}
-
-	// Get PHP version to use
-	version := getPhpVersion(cwd, config)
-
-	// Get PHP executable path
-	phpPath, exists := config[version]
-	if !exists {
-		fmt.Printf("PHP version %s not found in configuration\n", version)
-		os.Exit(1)
-	}
-
-	// Check if PHP executable exists
-	if _, err := os.Stat(phpPath); os.IsNotExist(err) {
-		fmt.Printf("PHP executable not found at: %s\n", phpPath)
-		os.Exit(1)
-	}
-
-	// Execute PHP with all arguments
-	args := os.Args[1:] // Skip the program name
-	cmd := exec.Command(phpPath, args...)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
-
-	err = cmd.Run()
-	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-				os.Exit(status.ExitStatus())
-			}
-		}
-		fmt.Printf("Error executing PHP: %v\n", err)
-		os.Exit(1)
 	}
 }
