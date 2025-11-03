@@ -232,6 +232,24 @@ func findPhpVersionFile(startDir string) string {
 
 // getCurrentPhpVersion gets the version of PHP currently in PATH
 func getCurrentPhpVersion() string {
+
+  // Find executable in %PATH%
+	phpPath, err := exec.LookPath("php")
+	if err != nil {
+		return "";
+	}
+
+	// Get current app executable
+  exePath, err := os.Executable();
+	if err != nil {
+		return "";
+	}
+
+	// Check if php.exe and php-runner are same file
+	if exePath == phpPath {
+		return "";
+	}
+
 	cmd := exec.Command("php", "--version")
 	output, err := cmd.Output()
 	if err != nil {

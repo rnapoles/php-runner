@@ -1,0 +1,1 @@
+go build -o php-runner.exe
