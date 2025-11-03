@@ -15,7 +15,7 @@ import (
 type Config map[string]string
 
 const (
-	configFileName = "php-runner.yaml"
+	configFileName = "php-runner.conf"
 	versionFile    = ".php-version"
 	defaultVersion = "8.2"
 )
@@ -76,7 +76,7 @@ func main() {
 	}
 }
 
-// findConfigFile searches for php-runner.yaml in platform-specific locations
+// findConfigFile searches for php-runner.conf in platform-specific locations
 func findConfigFile() (string, error) {
 	var searchPaths []string
 
@@ -121,7 +121,7 @@ func findConfigFile() (string, error) {
 	return "", fmt.Errorf("could not determine config file locations")
 }
 
-// loadConfig loads and parses the YAML-style configuration file line by line
+// loadConfig loads and parses the configuration file line by line
 func loadConfig(configPath string) (Config, error) {
 	file, err := os.Open(configPath)
 	if err != nil {
