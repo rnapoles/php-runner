@@ -1,5 +1,7 @@
 module php-runner
 
-go 1.23.1
+go 1.24.0
 
-require gopkg.in/yaml.v2 v2.4.0 // indirect
+toolchain go1.24.9
+
+require golang.org/x/mod v0.29.0

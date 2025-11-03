@@ -10,6 +10,8 @@ import (
 	"runtime"
 	"strings"
 	"syscall"
+	"sort"
+	"golang.org/x/mod/semver"
 )
 
 type Config map[string]string
@@ -183,6 +185,21 @@ func getPhpVersion(cwd string, config Config) string {
 		return version
 	}
 
+	// Create a slice to store the keys
+	versions := make([]string, 0, len(config))
+
+	// Iterate over the map and append each key to the slice
+	for key, _ := range config {
+		//fmt.Printf("%s\n", key)
+		versions = append(versions, key)
+	}
+
+	versions = sortVersions(versions)
+	if len(versions) > 1 {
+		createPhpVersionFile(cwd, versions[0])
+		return versions[0]
+	}
+
 	// Get current PHP version from PATH
 	currentVersion := getCurrentPhpVersion()
 	if currentVersion != "" && config[currentVersion] != "" {
@@ -276,4 +293,46 @@ func createPhpVersionFile(dir, version string) {
 	} else {
 		fmt.Printf("Created %s with PHP version %s\n", versionPath, version)
 	}
+}
+
+// sortVersions sorts a list of version strings from highest to lowest.
+// It ignores invalid versions and returns the sorted list without the "v" prefix.
+func sortVersions(versions []string) []string {
+	
+	// 1. Filter the list to get only valid, canonical versions
+	// We must store the "v" prefixed version for correct comparison.
+	validVersions := []string{}
+	for _, currentVersion := range versions {
+		testVersion := currentVersion
+		if !strings.HasPrefix(testVersion, "v") {
+			testVersion = "v" + testVersion
+		}
+
+		if semver.IsValid(testVersion) {
+			validVersions = append(validVersions, testVersion)
+		}
+	}
+
+	// 2. Sort the slice of valid versions in-place
+	// We use sort.Slice for a custom comparison.
+	sort.Slice(validVersions, func(i, j int) bool {
+		// We want to sort from "mayor to minor" (descending).
+		// The function should return 'true' if item 'i' comes *before* item 'j'.
+		// This means we return 'true' if version[i] > version[j].
+		//
+		// semver.Compare(v1, v2) returns:
+		//   +1 if v1 > v2
+		//   -1 if v1 < v2
+		//    0 if v1 == v2
+		return semver.Compare(validVersions[i], validVersions[j]) == 1
+	})
+	
+	// 3. Create a new list with the "v" prefix stripped
+	// (as requested in the previous step)
+	result := make([]string, len(validVersions))
+	for i, v := range validVersions {
+		result[i] = strings.TrimPrefix(v, "v")
+	}
+
+	return result
 }
