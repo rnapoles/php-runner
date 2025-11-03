@@ -15,7 +15,7 @@ import (
 type Config map[string]string
 
 const (
-	configFileName = "php-runner.conf"
+	configFileName = "php-runner.map"
 	versionFile    = ".php-version"
 	defaultVersion = "8.2"
 )
@@ -76,7 +76,7 @@ func main() {
 	}
 }
 
-// findConfigFile searches for php-runner.conf in platform-specific locations
+// findConfigFile searches for php-runner.map in platform-specific locations
 func findConfigFile() (string, error) {
 	var searchPaths []string
 
