@@ -65,6 +65,8 @@ func main() {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
+	//cmd.Env = os.Environ()
+	//cmd.Env = append(cmd.Env, "MY_VAR=some_value")
 
 	err = cmd.Run()
 	if err != nil {
